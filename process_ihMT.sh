@@ -33,8 +33,8 @@ Compulsory arguments:
 		MTRs: 		1 - MTs/MT0
 		MTRd: 		1 - MTd/MT0
 		ihMTR: 		2 * (MTRd - MTRs)
-		MTRsinv: 	MT0 / MTRs - 1
-		MTRdinv: 	MT0 / MTRd - 1
+		MTRsinv: 	MT0 / MTs - 1
+		MTRdinv: 	MT0 / MTd - 1
 		ihMTRinv: 	2 * (MTRdinv - MTRsinv)
 
 Optional arguments:
