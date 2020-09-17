@@ -9,6 +9,8 @@
 # //     the basis for manufacture or sale of items without written permission.
 # //     For a license agreement, please contact: <mailto: licensing@sattse.com>
 # //
+# //	 Developed by Lucas Soustelle, PhD, Aix Marseille Univ, CNRS, CRMBM
+# // 	 Mail: lucas.soustelle@univ-amu.fr
 # //////////////////////////////////////////////////////////////////////////////////////////
 
 import sys
