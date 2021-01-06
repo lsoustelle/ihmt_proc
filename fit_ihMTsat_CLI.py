@@ -25,7 +25,8 @@ def main():
                         \nNotes: \
                         \n\t1) The estimation assumes a centric-out readout, in steady-state.\
                         \n\t2) Providing a B1 map is strongly recommended. \
-                        \n\t3) Volume indices (see --R/--S/--D options) starts at 1. \
+                        \n\t3) The number of FLASH repetition in TFL should encompass acceleration settings (e.g., GRAPPA). \
+                        \n\t4) Volume indices (see --R/--S/--D options) starts at 1. \
                         \nReferences:\
                         \n\t [1] G. Helms et al., High-resolution maps of magnetization transfer with inherent correction for RF inhomogeneity and T1 relaxation obtained from 3D FLASH MRI, MRM 2008;60:1396-1407 \
                         \n\t [2] F. Munsch et al., Characterization of the cortical myeloarchitecture with inhomogeneous magnetization transfer imaging (ihMT), NeuroImage 2021;225:117442 \
@@ -201,9 +202,12 @@ def main():
     
     ################ MT0 estimation
     #### build xData_MT0
-    E1_ihMT     = numpy.exp(-(ihMTparx.BTR*(ihMTparx.NBTR-1)+ihMTparx.BTRlast)/T1_data, out=numpy.ones(T1_data.shape, dtype=float), where=T1_data!=0) 
-    E1_subTR    = numpy.exp(-TFLparx.subTR/T1_data, out=numpy.ones(T1_data.shape, dtype=float), where=T1_data!=0)
-    E1_RD       = numpy.exp(-(TFLparx.TR - (ihMTparx.NBTR-1)*ihMTparx.BTR - ihMTparx.BTRlast - TFLparx.Npart*TFLparx.subTR)/T1_data, out=numpy.ones(T1_data.shape, dtype=float), where=T1_data!=0)
+    E1_ihMT     = numpy.exp(numpy.divide(-(ihMTparx.BTR*(ihMTparx.NBTR-1)+ihMTparx.BTRlast),T1_data, \
+                                         out=numpy.ones(T1_data.shape, dtype=float), where=T1_data!=0)) 
+    E1_subTR    = numpy.exp(numpy.divide(-TFLparx.subTR,T1_data, \
+                                         out=numpy.ones(T1_data.shape, dtype=float), where=T1_data!=0))
+    E1_RD       = numpy.exp(numpy.divide(-(TFLparx.TR - (ihMTparx.NBTR-1)*ihMTparx.BTR - ihMTparx.BTRlast - TFLparx.Npart*TFLparx.subTR),T1_data, \
+                                         out=numpy.ones(T1_data.shape, dtype=float), where=T1_data!=0))
 
     xData_MT0  = [*zip(numpy.hstack((E1_ihMT,E1_subTR,E1_RD,cosFA_RO,Npart)))]
     
@@ -216,18 +220,24 @@ def main():
     
     start_time = time.time()
     with multiprocessing.Pool(NWORKERS) as pool:
-        Mz_MT0     = pool.starmap(func_MT0,xData_MT0)
+        RES     = pool.starmap(func_MT0,xData_MT0)    
     delay = time.time()
-    Mz_MT0 = numpy.array(Mz_MT0,dtype=float)[numpy.newaxis,:].T
     print("---- Done in {} seconds ----" .format(delay - start_time))
+    Mz_MT0 = numpy.array([a_tup[0] for a_tup in RES],dtype=float)[numpy.newaxis,:].T
+    A_RAGE = numpy.array([a_tup[1] for a_tup in RES],dtype=float)[numpy.newaxis,:].T
+    B_RAGE = numpy.array([a_tup[2] for a_tup in RES],dtype=float)[numpy.newaxis,:].T
+    
 
     ################ MTsat estimation
     #### build xData_MTw
-    E1_dt       = numpy.exp(-ihMTparx.dt/T1_data, out=numpy.ones(T1_data.shape, dtype=float), where=T1_data!=0)
-    E1_BTR      = numpy.exp(-(ihMTparx.BTR - ihMTparx.Np*ihMTparx.dt)/T1_data, out=numpy.ones(T1_data.shape, dtype=float), where=T1_data!=0)
-    E1_BTRlast  = numpy.exp(-(ihMTparx.BTRlast - ihMTparx.Np*ihMTparx.dt)/T1_data, out=numpy.ones(T1_data.shape, dtype=float), where=T1_data!=0)
+    E1_dt       = numpy.exp(numpy.divide(-ihMTparx.dt,T1_data, \
+                                         out=numpy.ones(T1_data.shape, dtype=float), where=T1_data!=0))
+    E1_BTR      = numpy.exp(numpy.divide(-(ihMTparx.BTR - ihMTparx.Np*ihMTparx.dt),T1_data, \
+                                         out=numpy.ones(T1_data.shape, dtype=float), where=T1_data!=0))
+    E1_BTRlast  = numpy.exp(numpy.divide(-(ihMTparx.BTRlast - ihMTparx.Np*ihMTparx.dt),T1_data, \
+                                         out=numpy.ones(T1_data.shape, dtype=float), where=T1_data!=0))
         
-    xData       = numpy.hstack((Mz_MT0,E1_dt,E1_BTR,E1_BTRlast,E1_subTR,E1_RD,cosFA_RO,Np,NBTR,Npart))
+    xData       = numpy.hstack((Mz_MT0,A_RAGE,B_RAGE,E1_dt,E1_BTR,E1_BTRlast,Np,NBTR))
     
     #### build yData
     MT0_data    = numpy.mean(ihMT_data[:,:,:,R_idx],axis=3)
@@ -252,10 +262,10 @@ def main():
     start_time = time.time()
     with multiprocessing.Pool(NWORKERS) as pool:
         MTssat = pool.starmap(fit_MTsat_brentq,MTs_iterable)
-    MTssat = numpy.array(MTssat,dtype=float)
     delay = time.time()
     print("---- Done in {} seconds ----" .format(delay - start_time))
-        
+    MTssat = numpy.array(MTssat,dtype=float)
+    
     print('')
     print('--------------------------------------------------')
     print('--------- Proceeding to MTdsat estimation --------')
@@ -265,9 +275,10 @@ def main():
     start_time = time.time()
     with multiprocessing.Pool(NWORKERS) as pool:
         MTdsat = pool.starmap(fit_MTsat_brentq,MTd_iterable)
-    MTdsat = numpy.array(MTdsat,dtype=float)
     delay = time.time()
     print("---- Done in {} seconds ----" .format(delay - start_time))
+    MTdsat = numpy.array(MTdsat,dtype=float)
+    
     
     ################ store & save NIfTI(s)
     ref_nii = nibabel.load(ihMT_in_niipath)
@@ -311,8 +322,40 @@ def main():
    
 ###################################################################
 ############## Fitting-related functions
-###################################################################        
+###################################################################
+def func_compute_AB(TILT,E1_SHORT,E1_LONG,N):
+    ## compute closed forms of Mz+1=A*Mz+B for a N*(TILT+E1_SHORT)+E1_LONG sequence pattern 
+    # numpy.seterr('raise')
+    # try:
+    A = E1_LONG * (E1_SHORT*TILT)**N
+    B = 1 + E1_LONG * ( E1_SHORT*TILT - (E1_SHORT*TILT)**N ) / ( 1 - E1_SHORT*TILT ) - \
+        E1_LONG/TILT * ( E1_SHORT*TILT * (1 - (E1_SHORT*TILT)**N ) / ( 1 - E1_SHORT*TILT ) )
+    # except FloatingPointError:
+    #     print(E1_LONG)
+    #     print(E1_SHORT)
+    #     print(TILT)
+    return A,B
+
 def func_MT0(xData):
+    E1_ihMT,E1_subTR,E1_RD,cosFA_RO,Npart = xData
+    A_RAGE,B_RAGE = func_compute_AB(cosFA_RO,E1_subTR,E1_RD,Npart)
+    A_ihMT,B_ihMT = E1_ihMT,1-E1_ihMT
+    
+    Mz_MT0 = (B_ihMT + A_ihMT*B_RAGE) / (1 - A_ihMT*A_RAGE)
+    
+    return Mz_MT0,A_RAGE,B_RAGE
+
+def func_MTsat_root(delta,xData,yData):
+    Mz_MT0,A_RAGE,B_RAGE,E1_dt,E1_BTR,E1_BTRlast,Np,NBTR = xData
+    A_BTR,B_BTR   = func_compute_AB(1-delta,E1_dt,E1_BTR,Np)
+    A_BTRL,B_BTRL = func_compute_AB(1-delta,E1_dt,E1_BTRlast,Np)
+    
+    Mz_MTw = (B_BTRL + B_BTR*A_BTRL*(A_BTR - A_BTR**NBTR)/(A_BTR - A_BTR**2) + B_RAGE*A_BTRL*A_BTR**(NBTR-1))/ \
+             (1 - A_BTRL*A_RAGE*A_BTR**(NBTR-1))
+    
+    return Mz_MTw/Mz_MT0 - yData
+        
+def func_MT0_dep(xData):
     E1_ihMT,E1_subTR,E1_RD,cosFA_RO,Npart = xData
     
     Mz      = 1
@@ -330,7 +373,7 @@ def func_MT0(xData):
  
     return Mz_MT0
 
-def func_MTsat_root(delta,xData,yData):
+def func_MTsat_root_dep(delta,xData,yData):
     Mz_MT0,E1_dt,E1_BTR,E1_BTRlast,E1_subTR,E1_RD,cosFA_RO,Np,NBTR,Npart = xData
     
     Mz      = 1
