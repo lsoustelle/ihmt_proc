@@ -105,10 +105,10 @@ def main():
         ihMTparx_NT             = collections.namedtuple('ihMTparx_NT','dt Np pihMTdelay')
         ihMTparx = ihMTparx_NT(dt           = float(args.ihMTparx[0])*1e-3, 
                                Np           = int(args.ihMTparx[1]),
-                               pihMTdelay   = float(args.ihMTparx[4])*1e-3)
+                               pihMTdelay   = float(args.ihMTparx[2])*1e-3)
         print('Summary of input ihMT-GRE preparation parameters:')
         print('\t Delta_t: {:.1f} ms'.format(ihMTparx.dt*1e3))
-        print('\t Number of pulses per burst: {}'.format(ihMTparx.Np))
+        print('\t Number of pulses per preparation: {}'.format(ihMTparx.Np))
         print('\t Post-ihMT preparation delay: {}'.format(ihMTparx.pihMTdelay*1e3))
         print('')    
     else: 
@@ -253,10 +253,10 @@ def main():
 
     ################ MTsat estimation
     #### build xData_MTw
-    NBTR        = numpy.full(T1_data.shape[0],ihMTparx.NBTR)[numpy.newaxis,:].T 
     E1_dt       = numpy.exp(numpy.divide(-ihMTparx.dt,T1_data, \
                                          out=numpy.ones(T1_data.shape, dtype=float), where=T1_data!=0))
     if EXP_RAGE_GRE == 'RAGE':
+        NBTR        = numpy.full(T1_data.shape[0],ihMTparx.NBTR)[numpy.newaxis,:].T 
         E1_BTR      = numpy.exp(numpy.divide(-(ihMTparx.BTR - ihMTparx.Np*ihMTparx.dt),T1_data, \
                                              out=numpy.ones(T1_data.shape, dtype=float), where=T1_data!=0))
         E1_BTRlast  = numpy.exp(numpy.divide(-(ihMTparx.BTRlast - ihMTparx.Np*ihMTparx.dt),T1_data, \
