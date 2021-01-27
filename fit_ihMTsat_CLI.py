@@ -24,9 +24,13 @@ def main():
     text_description = "Compute ihMT and MT saturation maps [1] from an ihMT-prepared experiment [2]. Outputs are in percentage unit.\
                         \nNotes: \
                         \n\t1) The estimation assumes a centric-out readout, in steady-state.\
-                        \n\t2) Providing a B1 map is strongly recommended. \
+                        \n\t2) Providing a B1 map (in absolute unit) is strongly recommended. \
                         \n\t3) The number of FLASH repetition in TFL should encompass acceleration settings (e.g., GRAPPA). \
                         \n\t4) Volume indices (see --R/--S/--D options) start at 1. \
+                        \n\t5) To Siemens users using the C2P ihMT-RAGE (Aix Marseille Univ, CNRS, CRMBM): \
+                        \n\t - the last BTR duration can be calculated as: \
+                        \n\t\t BTR_last = [ihMT Prep. time] - [# of bursts - 1]*[Burst TR]. \
+                        \n\t - The TFL \"FLASH number of repetition\" is equal to the \"Turbo Factor\" in Sequence/Part 1. \
                         \nReferences:\
                         \n\t [1] G. Helms et al., High-resolution maps of magnetization transfer with inherent correction for RF inhomogeneity and T1 relaxation obtained from 3D FLASH MRI, MRM 2008;60:1396-1407 \
                         \n\t [2] F. Munsch et al., Characterization of the cortical myeloarchitecture with inhomogeneous magnetization transfer imaging (ihMT), NeuroImage 2021;225:117442 \
