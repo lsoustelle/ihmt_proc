@@ -18,18 +18,17 @@ import subprocess
 import collections
 
 def main():
-    global ihMTparx; global TFLparx; global xtolVal; global EXP_RAGE_GRE
-
     ## parse arguments
     text_description = "Compute ihMT and MT saturation maps [1] from an ihMT-prepared experiment [2]. Outputs are in percentage unit.\
                         \nNotes: \
                         \n\t1) The estimation assumes a centric-out readout, in steady-state.\
-                        \n\t2) Providing a B1 map (in absolute unit) is strongly recommended. \
+                        \n\t2) Providing a B1 map is strongly recommended. \
                         \n\t3) The number of FLASH repetition in TFL should encompass acceleration settings (e.g., GRAPPA). \
                         \n\t4) Volume indices (see --R/--S/--D options) start at 1. \
-                        \n\t5) To Siemens users using the C2P ihMT-RAGE (Aix Marseille Univ, CNRS, CRMBM): \
-                        \n\t - the last BTR duration can be calculated as: \
+                        \n\t5) To Siemens users using the C2P ihMT-RAGE sequence (Aix Marseille Univ, CNRS, CRMBM): \
+                        \n\t - The last BTR duration can be calculated as: \
                         \n\t\t BTR_last = [ihMT Prep. time] - [# of bursts - 1]*[Burst TR]. \
+                        \n\t - The TFL \"FLASH TR\" is equal to the [Echo Spacing] variable in Sequence/Part 1. \
                         \n\t - The TFL \"FLASH number of repetition\" is equal to the \"Turbo Factor\" in Sequence/Part 1. \
                         \nReferences:\
                         \n\t [1] G. Helms et al., High-resolution maps of magnetization transfer with inherent correction for RF inhomogeneity and T1 relaxation obtained from 3D FLASH MRI, MRM 2008;60:1396-1407 \
@@ -37,7 +36,7 @@ def main():
                         " 
     parser = argparse.ArgumentParser(description=text_description,formatter_class=RawTextHelpFormatter)
     parser.add_argument('ihMT',         help="Input 4D NIfTI path")
-    parser.add_argument('T1',           help="Input T1 NIfTI path (T1 in sec)")
+    parser.add_argument('T1',           help="Input T1 (in sec) NIfTI path")
     parser.add_argument('ihMTsat',      help="Output ihMTsat NIfTI path")
     parser.add_argument('ihMTparx',   nargs="?",help="ihMT preparation parameters (comma-separated), in this order:   \n"
                                                                 "\t *** ihMT-RAGE: \n"
@@ -64,7 +63,7 @@ def main():
     parser.add_argument('--ihMTsatB1sq',nargs="?",help="Output ihMTsat image normalized by squared B1 NIfTI path")
     parser.add_argument('--MTdsatB1sq', nargs="?",help="Output MTsat from single-offset images normalized by squared B1 NIfTI path")
     parser.add_argument('--MTssatB1sq', nargs="?",help="Output MTsat from dual-offset images normalized by squared B1 NIfTI path")
-    parser.add_argument('--B1',         nargs="?",help="Input B1 map NIfTI path")
+    parser.add_argument('--B1',         nargs="?",help="Input B1 map (in absolute unit) NIfTI path")
     parser.add_argument('--mask',       nargs="?",help="Input binary mask NIfTI path")
     parser.add_argument('--R',          nargs="?",help="Reference indices in 4D input (comma-separated integers; default: 1)")
     parser.add_argument('--S',          nargs="?",help="Single-offset indices in 4D input (comma-separated integers; default: 2,4,...,N-1)")
@@ -283,8 +282,10 @@ def main():
     MTd_yData   = MTd_data[mask_idx[0],mask_idx[1],mask_idx[2]][numpy.newaxis,:].T / MT0_ydata
     
     #### iterable lists
-    MTs_iterable = [*zip(xData,MTs_yData)]
-    MTd_iterable = [*zip(xData,MTd_yData)]
+    EXP_RAGE_GRE = [EXP_RAGE_GRE]   * xData.shape[0]
+    xtolVal      = [xtolVal]        * xData.shape[0]
+    MTs_iterable = [*zip(xData,MTs_yData,EXP_RAGE_GRE,xtolVal)]
+    MTd_iterable = [*zip(xData,MTd_yData,EXP_RAGE_GRE,xtolVal)]
         
     #### run
     print('')
@@ -391,7 +392,7 @@ def func_MTsat_GRE_root(delta,xData,yData):
     
     return Mz_MTw/Mz_MT0 - yData
     
-def fit_MTsat_brentq(xData,yData):
+def fit_MTsat_brentq(xData,yData,EXP_RAGE_GRE,xtolVal):
     # root-finding with Brent's method
     # see: https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.brentq.html#scipy.optimize.brentq
     
