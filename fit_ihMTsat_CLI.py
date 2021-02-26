@@ -29,7 +29,10 @@ def main():
                         \n\t - The last BTR duration can be calculated as: \
                         \n\t\t BTR_last = [ihMT Prep. time] - [# of bursts - 1]*[Burst TR]. \
                         \n\t - The TFL \"FLASH TR\" is equal to the [Echo Spacing] variable in Sequence/Part 1. \
-                        \n\t - The TFL \"FLASH number of repetition\" is equal to the \"Turbo Factor\" in Sequence/Part 1. \
+                        \n\t - The TFL \"FLASH number of repetition\" is related to the [Turbo Factor] (TF) in Sequence/Part 1: \
+                        \n\t\t - Linear encoding with integrated/separated GRAPPA: TF \
+                        \n\t\t - Linear Rot. encoding with integrated GRAPPA: floor(TF/2)-1 + #ACS/2 \
+                        \n\t\t - Linear Rot. encoding with separated GRAPPA: floor(TF/2)-1 \
                         \nReferences:\
                         \n\t [1] G. Helms et al., High-resolution maps of magnetization transfer with inherent correction for RF inhomogeneity and T1 relaxation obtained from 3D FLASH MRI, MRM 2008;60:1396-1407 \
                         \n\t [2] F. Munsch et al., Characterization of the cortical myeloarchitecture with inhomogeneous magnetization transfer imaging (ihMT), NeuroImage 2021;225:117442 \
