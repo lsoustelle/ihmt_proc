@@ -321,7 +321,7 @@ def main():
     ################ store & save NIfTI(s)
     ref_nii = nibabel.load(ihMT_in_niipath)
     ihMTsat_map = numpy.full(ref_nii.shape[0:3],0,dtype=float)
-    ihMTsat_map[mask_idx[0],mask_idx[1],mask_idx[2]] = (MTdsat - MTssat)*100
+    ihMTsat_map[mask_idx[0],mask_idx[1],mask_idx[2]] = 2*(MTdsat - MTssat)*100
     ihMTsat_map[(ihMTsat_map < 0) | (ihMTsat_map > 100)] = 0
     new_img = nibabel.Nifti1Image(ihMTsat_map, ref_nii.affine, ref_nii.header)
     nibabel.save(new_img, ihMTsat_out_niipath)
