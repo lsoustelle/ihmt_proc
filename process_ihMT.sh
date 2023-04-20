@@ -1,25 +1,11 @@
 #!/usr/bin/env bash
 export LC_CTYPE=C
 trap control_c SIGINT # delete temp folder upon CTRL+C hit
+trap control_c EXIT # delete temp folder upon exit detection
+set -e
+
 BASEDIR=$(dirname "$0")
 TOOLSDIR=${BASEDIR}/Tools
-
-
-# ///////////////////////////////////////////////////////////////////////////////////////////
-# //                 Université d’Aix Marseille (AMU) -
-# //                 Centre National de la Recherche Scientifique (CNRS) –
-# //                 Copyright © 2018 AMU, CNRS All Rights Reserved.
-# //
-# //     These computer program listings and specifications, herein, are
-# //     the property of Université d’Aix Marseille and CNRS
-# //     shall not be reproduced or copied or used in whole or in part as
-# //     the basis for manufacture or sale of items without written permission.
-# //     For a license agreement, please contact: <mailto: licensing@sattse.com>
-# //
-# //	 Developed by Lucas Soustelle, PhD, Aix Marseille Univ, CNRS, CRMBM
-# // 	 Mail: lucas.soustelle@univ-amu.fr
-# //////////////////////////////////////////////////////////////////////////////////////////
-
 
 function cleanup
 { 
@@ -50,8 +36,8 @@ Compulsory arguments:
 		MTRs: 		1 - MTs/MT0
 		MTRd: 		1 - MTd/MT0
 		ihMTR: 		2 * (MTRd - MTRs)
-		MTRsinv: 	MT0 / MTs - 1
-		MTRdinv: 	MT0 / MTd - 1
+		MTRsinv: 	MT0 / MTRs - 1
+		MTRdinv: 	MT0 / MTRd - 1
 		ihMTRinv: 	2 * (MTRdinv - MTRsinv)
 
 Optional arguments:
@@ -61,10 +47,7 @@ Optional arguments:
 	-w: gradient non-linearity distortion correction ((0)/1)
 	-g: *.grad file name (Avanto_coeff_AS05.grad/Verio_coeff_AS097.grad so far) for distortion correction
 	-N: number of points constituting the grid for distortion dorrection (default = 60)
-	-t: BM4D denoising of raw MT0/MTs/MTd images ((0)/1)
-	-b: BM4D denoising of ihMT-derived maps ((0)/1)
-	-p: full path to Matlab binary for BM4D denoising
-	-u: unring native ihMT images (default: none; 1: unring routine; 2: cos-kernel apodization & zero-filling x2)
+	-u: unring native ihMT images (default: none; 1: mrdegibbs routine; 2: cos-kernel apodization & zero-filling x2)
 	-m: ihMT Motion Correction (default: none; 1: ihMT-MoCo; 2: antsMotionCorr (MT0); 3: antsMotionCorr (average))
 	-R: comma-separated indices of MT reference volume(s) in the 4D input stack (default is 1)
 	-S: comma-separated indices of MT single volumes in the 4D input stack (default is 2,4,6,...,N-1)
@@ -76,49 +59,28 @@ Notes:
 	- If a DICOM folder is provided, dcm2niix package has to be installed & in your PATH variable 
 	- Performs: 
 		1) MP-PCA denoising (if set; EXTENT should be >= amount of raw 3D volumes)
-		2) BM4D denoising of raw MT0/MTw (if set)
-		3) Gradient non-linearity distortion correction (if set)
-		4) Unringing (if set)
-		5) Motion Correction (if set)
-		6) Maps computation
-		7) BM4D "denoising" of computed maps (if set)
-	- MP-PCA denoising (Veerart 2016) necessitates an up-to-date MRtrix3 package & in your PATH variable
+		2) Gradient non-linearity distortion correction (if set)
+		3) Unringing (if set)
+		4) Motion Correction (if set)
+		5) Maps computation
+	- MP-PCA denoising (Veerart 2016, dwidenoise) necessitates an up-to-date MRtrix3 package & in your PATH variable
 	- gradient non-linearity distortion correction necessitates the right *.grad file and a large enough grid
-	- unring (Kellner 2016) necessitates the unring binary in your PATH variable
+	- unring (Kellner 2016; mrdegibbs) necessitates an up-to-date MRtrix3 package & in your PATH variable
 	- cos-kernel apodization necessitates python3 with up-to-date numpy & nibabel libs
-	- BM4D denoising (Maggioni 2013) necessitates a provided path to Matlab binary (WITH set up Parallel Computing Toolbox)
-	- BM4D on computed maps is discouraged (the functionnality necessitating raw images), and should be employed as a last resort on raw maps
 	- please cite the subsequent sources depending on the used functionnalities
+
+References:
+	- Soustelle et al., 
+	A Motion Correction Strategy for Multi-Contrast based 3D parametric imaging: Application to Inhomogeneous Magnetization Transfer (ihMT) 
+	bioRxiv, 2020
+	DOI: 10.1101/2020.09.11.292649
+	- Soustelle et al., 
+	A strategy to reduce the sensitivity of inhomogeneous magnetization transfer (ihMT) imaging to radiofrequency transmit field variations at 3 T 
+	Magnetic Resonance in Medicine, 2022
+	DOI: 10.1002/mrm.29055
 
 USAGE
     exit 1
-}
-
-function func_denoiseBM4D {
-	local -n _TMPNIIPATH=$1
-	local -n _FLAG_DENOISE=$2
-
-	if [[ ${_FLAG_DENOISE} -eq 1 ]]; then
-		echo -e "\nBM4D denoising"
-		${MATLAB_BIN} -nodisplay <<EOF
-		addpath(genpath('Tools'));
-		cell_in_niipaths 	= 	strsplit('${_TMPNIIPATH[@]}');
-		if numel(cell_in_niipaths) > 1
-			parpool(${N_THREADS});
-			parfor ii = 1 : numel(cell_in_niipaths)
-				tmp_nii    		= load_untouch_nii(cell_in_niipaths{ii});
-			    tmp_nii.img 	= bm4d(tmp_nii.img,'Rice');
-				save_untouch_nii(tmp_nii,cell_in_niipaths{ii})
-			end
-		else
-			tmp_nii    		= load_untouch_nii(cell_in_niipaths{1});
-			tmp_nii.img 	= bm4d(tmp_nii.img,'Rice');
-			save_untouch_nii(tmp_nii,cell_in_niipaths{1})
-		end
-		exit
-EOF
-		echo "BM4D denoising: done"
-	fi 
 }
 
 function func_denoiseMPPCA {
@@ -146,14 +108,12 @@ FLAG_MAP_MTRsinv=0
 FLAG_MAP_MTRdinv=0
 FLAG_IDX=0
 FLAG_DENOISE_RAW=0
-FLAG_DENOISE_MT=0
 FLAG_GNLDC=0
 FLAG_UNRING=0
 FLAG_MoCo=0
-FLAG_DENOISE_MAPS=0
 N_THREADS=1
 if [[ $# -eq 0 ]] ; then Usage && echo $USAGE ; exit 0 ; fi
-while getopts "i:o:c:n:d:e:w:g:N:t:b:p:u:m:R:S:D:k:" OPT; do
+while getopts "i:o:c:n:d:e:w:g:N:u:m:R:S:D:k:" OPT; do
 	case $OPT in
 		i)	
 	INPUT_PATH=$OPTARG
@@ -182,15 +142,6 @@ while getopts "i:o:c:n:d:e:w:g:N:t:b:p:u:m:R:S:D:k:" OPT; do
 	;;
 		N)
 	N_GRID=$OPTARG
-	;;
-		t)
-	FLAG_DENOISE_MT=$OPTARG
-	;;
-		b)
-	FLAG_DENOISE_MAPS=$OPTARG
-	;;
-		p)
-	MATLAB_BIN=$OPTARG
 	;;
 		u)
 	FLAG_UNRING=$OPTARG
@@ -227,19 +178,19 @@ if [[ -z ${INPUT_PATH} ]]; then
     echo "Input not defined."
     exit
 fi
-CHECK_INPUT=$(file -b ${INPUT_PATH})
-if [[ ${CHECK_INPUT} == *"cannot open"* ]]; then
+
+if [[ ${INPUT_PATH} == *".nii"* ]]; then
+	FLAG_DCM=0
+	echo "----------------"
+    echo "Input is a NIfTI."	
+elif [[ -d ${INPUT_PATH} ]]; then
+	FLAG_DCM=1
+	echo "----------------"
+    echo "Input is directory and should contain DICOMs."
+else
 	echo "----------------"
     echo "Input not found."
     exit
-elif [[ ${CHECK_INPUT} == *"directory"* ]]; then
-	FLAG_DCM=1
-	echo "----------------"
-    echo "Input is a DICOM folder."
-elif [[ ${CHECK_INPUT} == *"data"* ]]; then
-	FLAG_DCM=0
-	echo "----------------"
-    echo "Input is a NIfTI."
 fi
 
 if [[ -z ${OUTPUT_NIIPATH} ]]; then
@@ -295,7 +246,6 @@ if [[ -z ${ANTSPATH} ]]; then
     exit
 fi
 
-
 if [[ ${N_THREADS} =~ ^-?[0-9]+$  ]]; then 
 	echo Processing with ${N_THREADS} threads
 else
@@ -338,17 +288,9 @@ if [[ ${FLAG_MoCo} -lt 0 || ${FLAG_MoCo} -gt 3 ]]; then
     exit
 fi
 
-
-
-if [[ ${FLAG_DENOISE_MAPS} -eq 1 || ${FLAG_DENOISE_MT} -eq 1 ]] && [[ ! -e ${MATLAB_BIN} || -z ${MATLAB_BIN} ]]; then
+if [[ ${FLAG_UNRING} -eq 1 && -z `which mrdegibbs` ]]; then
 	echo "----------------"
-	echo "Matlab binary path not provided or nonexistent: BM4D denoising impossible."
-	exit
-fi
-
-if [[ ${FLAG_UNRING} -eq 1 && -z `which unring` ]]; then
-	echo "----------------"
-    echo "unring program can't be found. Please install package & set your environment path."
+    echo "mrdegibbs (unriging) program can't be found. Please install package & set your environment path."
     exit
 fi
 if [[ -z `which python3` && ${FLAG_UNRING} -eq 2 ]]; then
@@ -475,18 +417,14 @@ MTRdinv_TMPNIIPATH=${TMP_FLD}/MTRdinv.nii
 ## Denoise native ihMT images (MP-PCA)
 func_denoiseMPPCA ihMT_TMPNIIPATH FLAG_DENOISE_RAW
 
-# Denoise MT0/MTw (BM4D)
-func_denoiseBM4D ihMT_TMPNIIPATH FLAG_DENOISE_MT
-
 ## Unring
-if [[ ${FLAG_UNRING} -eq 1 && ! -z `which unring` ]]; then 
-	echo 'Unringing (unring)'
+if [[ ${FLAG_UNRING} -eq 1 ]]; then 
+	echo 'Unringing (mrdegibbs)' ## using MRtrix3; for efficient 3D unring version, wait for next release (currently in dev branch as of 2023/04/20)  
 	ihMT_TMPNIIGZPATH=${ihMT_TMPNIIPATH/.nii/.nii.gz}
-	${BASEDIR}/unring ${ihMT_TMPNIIPATH} 						${ihMT_TMPNIIGZPATH/.nii.gz/_d1.nii.gz} -d 1
-	${BASEDIR}/unring ${ihMT_TMPNIIGZPATH/.nii.gz/_d1.nii.gz} 	${ihMT_TMPNIIGZPATH/.nii.gz/_d1d3.nii.gz} -d 3
+	mrdegibbs ${ihMT_TMPNIIPATH} 						${ihMT_TMPNIIGZPATH/.nii.gz/_d1.nii.gz} -axes 0,1
+	mrdegibbs ${ihMT_TMPNIIGZPATH/.nii.gz/_d1.nii.gz} 	${ihMT_TMPNIIGZPATH/.nii.gz/_d1d3.nii.gz} -axes 0,3
 	mv ${ihMT_TMPNIIGZPATH/.nii.gz/_d1d3.nii.gz} ${ihMT_TMPNIIGZPATH}
-	gzip -d -f ${ihMT_TMPNIIGZPATH}
-	echo 'Unringing (unring): done'
+	echo 'Unringing (mrdegibbs): done'
 elif [[ ${FLAG_UNRING} -eq 2 ]]; then
 	echo 'Unringing (cos-kernel apodization)'
 	python3 ${BASEDIR}/apodize_cos.py ${ihMT_TMPNIIPATH}
@@ -588,51 +526,41 @@ if [[ ${FLAG_MAP_ihMT} -eq 1 ]]; then
 	cp ${ihMT_TMPNIIPATH} ${OUTPUT_ihMTNIIPATH}
 fi
 
-declare -a NII_TO_DENOISE
 if [[ ${FLAG_MAP_MTRs} -eq 1 ]]; then
 	OUTPUT_MTRsNIIPATH=${OUTPUT_NIIPATH}MTRs.nii
 	${ANTSPATH}/ThresholdImage  3 ${MTRs_TMPNIIPATH}  				${MASK_TMPNIIPATH} 		0 1
 	${ANTSPATH}/ImageMath 		3 ${OUTPUT_MTRsNIIPATH} 		m 	${MTRs_TMPNIIPATH} 		${MASK_TMPNIIPATH}
-	NII_TO_DENOISE=( ${NII_TO_DENOISE[@]} ${OUTPUT_MTRsNIIPATH} )
 fi
 
 if [[ ${FLAG_MAP_MTRd} -eq 1 ]]; then
 	OUTPUT_MTRdNIIPATH=${OUTPUT_NIIPATH}MTRd.nii
 	${ANTSPATH}/ThresholdImage  3 ${MTRd_TMPNIIPATH}  				${MASK_TMPNIIPATH} 		0 1
 	${ANTSPATH}/ImageMath 		3 ${OUTPUT_MTRdNIIPATH} 		m 	${MTRd_TMPNIIPATH} 		${MASK_TMPNIIPATH}
-	NII_TO_DENOISE=( ${NII_TO_DENOISE[@]} ${OUTPUT_MTRdNIIPATH} )
 fi
 
 if [[ ${FLAG_MAP_ihMTR} -eq 1 ]]; then
 	OUTPUT_ihMTR_NIIPATH=${OUTPUT_NIIPATH}ihMTR.nii
 	${ANTSPATH}/ThresholdImage  3 ${ihMTR_TMPNIIPATH}  				${MASK_TMPNIIPATH} 		0 1
 	${ANTSPATH}/ImageMath 		3 ${OUTPUT_ihMTR_NIIPATH} 		m 	${ihMTR_TMPNIIPATH} 	${MASK_TMPNIIPATH}
-	NII_TO_DENOISE=( ${NII_TO_DENOISE[@]} ${OUTPUT_ihMTR_NIIPATH} )
 fi
 
 if [[ ${FLAG_MAP_MTRsinv} -eq 1 ]]; then
 	OUTPUT_MTRsinvNIIPATH=${OUTPUT_NIIPATH}MTRsinv.nii
 	${ANTSPATH}/ThresholdImage  3 ${MTRsinv_TMPNIIPATH}  			${MASK_TMPNIIPATH} 		0 1
 	${ANTSPATH}/ImageMath 		3 ${OUTPUT_MTRsinvNIIPATH} 		m 	${MTRsinv_TMPNIIPATH} 	${MASK_TMPNIIPATH}
-	NII_TO_DENOISE=( ${NII_TO_DENOISE[@]} ${OUTPUT_MTRsinvNIIPATH} )
 fi
 
 if [[ ${FLAG_MAP_MTRdinv} -eq 1 ]]; then
 	OUTPUT_MTRdinvNIIPATH=${OUTPUT_NIIPATH}MTRdinv.nii
 	${ANTSPATH}/ThresholdImage  3 ${MTRdinv_TMPNIIPATH}  			${MASK_TMPNIIPATH} 		0 1
 	${ANTSPATH}/ImageMath 		3 ${OUTPUT_MTRdinvNIIPATH} 		m 	${MTRdinv_TMPNIIPATH} 	${MASK_TMPNIIPATH}
-	NII_TO_DENOISE=( ${NII_TO_DENOISE[@]} ${OUTPUT_MTRdinvNIIPATH} )
 fi
 
 if [[ ${FLAG_MAP_ihMTRinv} -eq 1 ]]; then
 	OUTPUT_ihMTRinvNIIPATH=${OUTPUT_NIIPATH}ihMTRinv.nii
 	${ANTSPATH}/ThresholdImage  3 ${ihMTRinv_TMPNIIPATH}  			${MASK_TMPNIIPATH} 		0 1
 	${ANTSPATH}/ImageMath 		3 ${OUTPUT_ihMTRinvNIIPATH} 	m 	${ihMTRinv_TMPNIIPATH} 	${MASK_TMPNIIPATH}
-	NII_TO_DENOISE=( ${NII_TO_DENOISE[@]} ${OUTPUT_ihMTRinvNIIPATH} )
 fi
-
-# Denoise ihMT-derived maps (BM4D)
-func_denoiseBM4D NII_TO_DENOISE FLAG_DENOISE_MAPS
 
 
 ## Clean (or not)
