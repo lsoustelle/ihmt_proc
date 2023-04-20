@@ -23,5 +23,5 @@
 [1] L. Soustelle et al., A Motion Correction Strategy for Multi-Contrast based 3D parametric imaging : Application to Inhomogeneous Magnetization Transfer (ihMT), bioRxiv 2020
 
 [2] F. Munsch et al., Characterization of the cortical myeloarchitecture with inhomogeneous magnetization transfer imaging (ihMT), NeuroImage 2020;225:117442
- Soustelle et al., A Motion Correction Strategy for Multi-Contrast based 3D parametric imaging: Application to Inhomogeneous Magnetization Transfer (ihMT), bioRxiv, 2020 (DOI: 10.1101/2020.09.11.292649)
-[3] 
+ 
+[3] L. Soustelle et al., A strategy to reduce the sensitivity of inhomogeneous magnetization transfer (ihMT) imaging to radiofrequency transmit field variations at 3 T, Magnetic Resonance in Medicine, 2022 (DOI: 10.1002/mrm.29055)
