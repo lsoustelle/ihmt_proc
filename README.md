@@ -20,6 +20,7 @@
 	- The script requires up-to-date Python (developed on 3.8.2) with numpy (≥ 1.19.4), scipy (≥ 1.5.4) and nibabel (≥ 3.2.0) packages.
 
 * References:
+
 [1] L. Soustelle et al., A Motion Correction Strategy for Multi-Contrast based 3D parametric imaging : Application to Inhomogeneous Magnetization Transfer (ihMT), bioRxiv 2020
 
 [2] F. Munsch et al., Characterization of the cortical myeloarchitecture with inhomogeneous magnetization transfer imaging (ihMT), NeuroImage 2020;225:117442
