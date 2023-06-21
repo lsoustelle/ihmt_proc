@@ -204,7 +204,7 @@ def main():
     if args.R is not None:
         R_idx = numpy.array(args.R.split(','), dtype=numpy.int32)-1
     else:
-        R_idx = 0
+        R_idx = [0]
     if args.S is not None:
         S_idx = numpy.array(args.S.split(','), dtype=numpy.int32)-1
     else:
