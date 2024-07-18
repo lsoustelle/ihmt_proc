@@ -32,7 +32,7 @@ Compulsory arguments:
 	-i: input 4D ihMT NIfTI image OR DICOM folder
 	-o: output path-prefix to 3D ihMT-derived NIfTI images
 	-c: comma-separated ihMT-derived maps outputs (ihMT,ihMTR,MTRs,MTRd,ihMTRinv,MTRsinv,MTRdinv)
-		ihMT:		raw data in NIfTI format
+		ihMT:		pre-processed ihMT stack
 		MTRs: 		1 - MTs/MT0
 		MTRd: 		1 - MTd/MT0
 		ihMTR: 		2 * (MTRd - MTRs)
@@ -45,7 +45,7 @@ Optional arguments:
 	-d: MP-PCA denoising of raw ihMT images ((0)/1)
 	-e: MP-PCA kernel extent (default = 3,3,3) 
 	-w: gradient non-linearity distortion correction ((0)/1)
-	-g: *.grad file name (Avanto_coeff_AS05.grad/Verio_coeff_AS097.grad so far) for distortion correction
+	-g: *.grad file name (some are already provided, e.g. Avanto_coeff_AS05.grad) for distortion correction
 	-N: number of points constituting the grid for distortion dorrection (default = 60)
 	-u: unring native ihMT images (default: none; 1: mrdegibbs routine; 2: cos-kernel apodization & zero-filling x2)
 	-m: ihMT Motion Correction (default: none; 1: ihMT-MoCo; 2: antsMotionCorr (MT0); 3: antsMotionCorr (average))
@@ -138,7 +138,9 @@ while getopts "i:o:c:n:d:e:w:g:N:u:m:R:S:D:k:" OPT; do
 	;;
 		g)
 	GRAD_PATH=$OPTARG
-	GRAD_PATH=${TOOLSDIR}/gradunwarp/coeff_grad/${GRAD_PATH}
+	if [[ -f ${TOOLSDIR}/gradunwarp/coeff_grad/${GRAD_PATH} ]]; then
+		GRAD_PATH=${TOOLSDIR}/gradunwarp/coeff_grad/${GRAD_PATH}
+	fi
 	;;
 		N)
 	N_GRID=$OPTARG
@@ -272,7 +274,7 @@ fi
 
 if [[ ${FLAG_GNLDC} -eq 1 ]] && [[ ! -e ${GRAD_PATH} || -z ${GRAD_PATH} ]]; then
 	echo "----------------"
-    echo "Gradient file for distortion correction can't be found. Please check."
+    echo "Gradient file for distortion correction not found. Please check."
     exit
 fi
 
