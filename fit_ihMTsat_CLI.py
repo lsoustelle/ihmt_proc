@@ -333,7 +333,7 @@ def main():
         nibabel.save(new_img, args.MTdsat)
     if args.MTssat is not None:
         MTssat_map = numpy.full(ref_nii.shape[0:3],0,dtype=float)
-        MTssat_map[mask_idx[0],mask_idx[1],mask_idx[2]] = MTdsat*100
+        MTssat_map[mask_idx[0],mask_idx[1],mask_idx[2]] = MTssat*100
         new_img = nibabel.Nifti1Image(MTssat_map, ref_nii.affine, ref_nii.header)
         nibabel.save(new_img, args.MTssat)
     
