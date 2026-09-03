@@ -1,0 +1,21 @@
+name: ihmtproc
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - ants
+  - pip
+  - cxx-compiler
+  - eigen                
+  - fftw
+  - pybind11
+  - numpy
+  - nibabel
+  - tqdm
+  - llvm-openmp
+  - scipy
+  - cmake
+  - gxx_linux-64
+  - openmp
+  - scikit-build-core 
+  - ninja

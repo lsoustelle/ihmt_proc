@@ -1,0 +1,30 @@
+[build-system]
+requires      = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name            = "ihmt-tools"
+version         = "0.1"
+description     = "Package for ihMT pre-/post-processing"
+readme          = "README.md"
+license         = { text = "AMU/CNRS" }
+requires-python = ">=3.11"
+
+dependencies = [
+    "numpy>=2.3",
+    "scipy>=1.15",
+    "nibabel>=5",
+    "nipreps-synthstrip",
+    "tmppca @ git+https://github.com/lsoustelle/tMPPCA.git@75807e1",
+    "svsdegibbs @ git+https://github.com/lsoustelle/svsdegibbs.git@6353581",
+    "gradunwarp @ git+https://github.com/Washington-University/gradunwarp.git@6603919",
+]
+
+[project.scripts]
+fit-ihMTsat    = "ihmt.fit_ihMTsat_cli:main"
+proc-ihMT      = "ihmt.process_ihMT_cli:main"
+moco-ihMT      = "ihmt.moco_ihMT_cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ihmt*"]

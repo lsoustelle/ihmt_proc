@@ -29,7 +29,7 @@ def main():
                         \n\t - The last BTR duration can be calculated as: \
                         \n\t\t BTR_last = [ihMT Prep. time] - [# of bursts - 1]*[Burst TR]. \
                         \n\t - The TFL \"FLASH TR\" is equal to the [Echo Spacing] variable in Sequence/Part 1. \
-                        \n\t - The TFL \"FLASH number of repetition\" is related to the [Turbo Factor] (TF) in Sequence/Part 1: \
+                        \n\t - The TFL \"FLASH number of repetition\" is related to the [Turbo Factor] (TF) in Sequence/Part 1 and number of dummy echoes in Sequence/Special: \
                         \n\t\t - Linear encoding with integrated/separated GRAPPA: TF \
                         \n\t\t - Linear Rot. encoding with integrated GRAPPA: floor(TF/2)-1 + #ACS/2 \
                         \n\t\t - Linear Rot. encoding with separated GRAPPA: floor(TF/2)-1 \
@@ -59,8 +59,9 @@ def main():
                                                                 "\t     1) FLASH TR (ms) \n"
                                                                 "\t     2) Readout flip angle (deg) \n"
                                                                 "\t     3) FLASH number of repetition (int) \n"
-                                                                "\t     4) Sequence Time to Repetition (TR; ms) \n"                                                               
-                                                                "\t e.g. 8.3,7,128,4000.0")
+                                                                "\t     4) Number of dummy echoes (int) \n"  
+                                                                "\t     5) Sequence Time to Repetition (TR; ms) \n"                                                                                                                           
+                                                                "\t e.g. 8.3,7,128,0,4000.0")
     parser.add_argument('--MTdsat',     nargs="?",help="Output MTsat from dual-offset images NIfTI path")
     parser.add_argument('--MTssat',     nargs="?",help="Output MTsat from single-offset images NIfTI path")
     parser.add_argument('--ihMTsatB1sq',nargs="?",help="Output ihMTsat image normalized by squared B1 NIfTI path")
@@ -72,7 +73,7 @@ def main():
     parser.add_argument('--S',          nargs="?",help="Single-offset indices in 4D input (comma-separated integers; default: 2,4,...,N-1)")
     parser.add_argument('--D',          nargs="?",help="Dual-offset indices in 4D input (comma-separated integers; default: 3,5,...,N)")
     parser.add_argument('--xtol',       nargs="?",type=float, default=1e-6, help="x tolerance for root finding (default: 1e-6)")
-    parser.add_argument('--nworkers',   nargs="?",type=int, default=1, help="Use this for multi-threading computation (default: 1)")
+    parser.add_argument('--nthreads',   nargs="?",type=int, default=1, help="Use this for multi-threading computation (default: 1)")
     
     args                = parser.parse_args()
     ihMT_in_niipath     = args.ihMT
@@ -81,7 +82,7 @@ def main():
     B1_in_niipath       = args.B1
     mask_in_niipath     = args.mask
     xtolVal             = args.xtol
-    NWORKERS            = args.nworkers if args.nworkers <= get_physCPU_number() else get_physCPU_number()
+    NWORKERS            = args.nthreads if args.nthreads <= get_physCPU_number() else get_physCPU_number()
 
     #### Sequence parx 
     print('')
@@ -122,18 +123,20 @@ def main():
                              --- expected 3 (ihMT-GRE) or 5 (ihMT-RAGE), found {})' .format(len(args.ihMTparx)))
     
     args.TFLparx = args.TFLparx.split(',')
-    if len(args.TFLparx) != 4: 
+    if len(args.TFLparx) != 5: 
         parser.error('Wrong amount of sequence/readout parameters (TFLparx \
-                         --- expected 4, found {})' .format(len(args.TFLparx)))
-    TFLparx_NT              = collections.namedtuple('TFLparx_NT', 'subTR FA Npart TR')
+                         --- expected 5, found {})' .format(len(args.TFLparx)))
+    TFLparx_NT              = collections.namedtuple('TFLparx_NT', 'subTR FA Npart N_DE TR')
     TFLparx = TFLparx_NT(  subTR    = float(args.TFLparx[0])*1e-3, 
                            FA       = float(args.TFLparx[1]),
                            Npart    = int(args.TFLparx[2]),
-                           TR       = float(args.TFLparx[3])*1e-3)    
+                           N_DE     = int(args.TFLparx[3]),
+                           TR       = float(args.TFLparx[4])*1e-3)    
     print('Summary of TFL parameters:')
     print('\t subTR: {:.1f} ms'.format(TFLparx.subTR*1e3))
     print('\t Readout FA: {:.1f} deg'.format(TFLparx.FA))
     print('\t Number of TFL rep.: {}'.format(TFLparx.Npart))
+    print('\t Number of dummy echoes: {}'.format(TFLparx.N_DE))
     print('\t Sequence TR: {:.1f} ms'.format(TFLparx.TR*1e3))
     print('')
     
@@ -222,6 +225,7 @@ def main():
     cosFA_RO    = numpy.cos(TFLparx.FA * B1_data *numpy.pi/180)
     Np          = numpy.full(T1_data.shape[0],ihMTparx.Np)[numpy.newaxis,:].T
     Npart       = numpy.full(T1_data.shape[0],TFLparx.Npart)[numpy.newaxis,:].T 
+    N_DE        = numpy.full(T1_data.shape[0],TFLparx.N_DE)[numpy.newaxis,:].T 
     E1_subTR    = numpy.exp(numpy.divide(-TFLparx.subTR,T1_data, \
                                          out=numpy.ones(T1_data.shape, dtype=float), where=T1_data!=0))
         
@@ -230,22 +234,21 @@ def main():
     if EXP_RAGE_GRE == 'RAGE':
         E1_ihMT     = numpy.exp(numpy.divide(-(ihMTparx.BTR*(ihMTparx.NBTR-1)+ihMTparx.BTRlast),T1_data, \
                                              out=numpy.ones(T1_data.shape, dtype=float), where=T1_data!=0)) 
-        E1_RD       = numpy.exp(numpy.divide(-(TFLparx.TR - (ihMTparx.NBTR-1)*ihMTparx.BTR - ihMTparx.BTRlast - TFLparx.Npart*TFLparx.subTR),T1_data, \
+        E1_RD       = numpy.exp(numpy.divide(-(TFLparx.TR - (ihMTparx.NBTR-1)*ihMTparx.BTR - ihMTparx.BTRlast - (TFLparx.Npart+TFLparx.N_DE)*TFLparx.subTR),T1_data, \
                                              out=numpy.ones(T1_data.shape, dtype=float), where=T1_data!=0))     
     else:
         E1_ihMT     = numpy.exp(numpy.divide(-(ihMTparx.Np*ihMTparx.dt+ihMTparx.pihMTdelay),T1_data, \
                                              out=numpy.ones(T1_data.shape, dtype=float), where=T1_data!=0))        
-        E1_RD       = numpy.exp(numpy.divide(-(TFLparx.TR - ihMTparx.Np*ihMTparx.dt - ihMTparx.pihMTdelay - TFLparx.Npart*TFLparx.subTR),T1_data, \
+        E1_RD       = numpy.exp(numpy.divide(-(TFLparx.TR - ihMTparx.Np*ihMTparx.dt - ihMTparx.pihMTdelay - (TFLparx.Npart+TFLparx.N_DE)*TFLparx.subTR),T1_data, \
                                              out=numpy.ones(T1_data.shape, dtype=float), where=T1_data!=0))  
             
-    xData_MT0  = [*zip(numpy.hstack((E1_ihMT,E1_subTR,E1_RD,cosFA_RO,Npart)))]
+    xData_MT0  = [*zip(numpy.hstack((E1_ihMT,E1_subTR,E1_RD,cosFA_RO,Npart,N_DE)))]
     
     #### run pre-compute MT0 once & for all
     print('')
     print('--------------------------------------------------')
     print('-------- Proceeding to MT0 pre-computation -------')
     print('--------------------------------------------------')
-    print('')
     
     start_time = time.time()
     with multiprocessing.Pool(NWORKERS) as pool:
@@ -255,6 +258,8 @@ def main():
     Mz_MT0 = numpy.array([a_tup[0] for a_tup in RES],dtype=float)[numpy.newaxis,:].T
     A_RAGE = numpy.array([a_tup[1] for a_tup in RES],dtype=float)[numpy.newaxis,:].T
     B_RAGE = numpy.array([a_tup[2] for a_tup in RES],dtype=float)[numpy.newaxis,:].T
+    A_DE   = numpy.array([a_tup[3] for a_tup in RES],dtype=float)[numpy.newaxis,:].T # dummy echoes
+    B_DE   = numpy.array([a_tup[4] for a_tup in RES],dtype=float)[numpy.newaxis,:].T # dummy echoes
     
 
     ################ MTsat estimation
@@ -268,12 +273,12 @@ def main():
         E1_BTRlast  = numpy.exp(numpy.divide(-(ihMTparx.BTRlast - ihMTparx.Np*ihMTparx.dt),T1_data, \
                                              out=numpy.ones(T1_data.shape, dtype=float), where=T1_data!=0))
             
-        xData       = numpy.hstack((Mz_MT0,A_RAGE,B_RAGE,E1_dt,E1_BTR,E1_BTRlast,Np,NBTR))
+        xData       = numpy.hstack((Mz_MT0,A_RAGE,B_RAGE,E1_dt,E1_BTR,E1_BTRlast,Np,NBTR,A_DE,B_DE))
     else:
         E1_pihMTdelay = numpy.exp(numpy.divide(-ihMTparx.pihMTdelay,T1_data, \
                                              out=numpy.ones(T1_data.shape, dtype=float), where=T1_data!=0))
             
-        xData       = numpy.hstack((Mz_MT0,A_RAGE,B_RAGE,E1_dt,E1_pihMTdelay,Np))
+        xData       = numpy.hstack((Mz_MT0,A_RAGE,B_RAGE,E1_dt,E1_pihMTdelay,Np,A_DE,B_DE))
     
     #### build yData
     MT0_data    = numpy.mean(ihMT_data[:,:,:,R_idx],axis=3)
@@ -295,7 +300,6 @@ def main():
     print('--------------------------------------------------')
     print('--------- Proceeding to MTssat estimation --------')
     print('--------------------------------------------------')
-    print('')
     
     start_time = time.time()
     with multiprocessing.Pool(NWORKERS) as pool:
@@ -308,7 +312,6 @@ def main():
     print('--------------------------------------------------')
     print('--------- Proceeding to MTdsat estimation --------')
     print('--------------------------------------------------')
-    print('')
     
     start_time = time.time()
     with multiprocessing.Pool(NWORKERS) as pool:
@@ -369,29 +372,41 @@ def func_compute_AB(TILT,E1_SHORT,E1_LONG,N):
     return A,B
 
 def func_MT0(xData):
-    E1_ihMT,E1_subTR,E1_RD,cosFA_RO,Npart = xData
-    A_RAGE,B_RAGE = func_compute_AB(cosFA_RO,E1_subTR,E1_RD,Npart)
+    E1_ihMT,E1_subTR,E1_RD,cosFA_RO,Npart,N_DE = xData
+    A_RAGE,B_RAGE = func_compute_AB(cosFA_RO,E1_subTR,E1_RD,Npart+N_DE)
     A_ihMT,B_ihMT = E1_ihMT,1-E1_ihMT
     
     Mz_MT0 = (B_ihMT + A_ihMT*B_RAGE) / (1 - A_ihMT*A_RAGE)
+
+    # readout is shifted by dummy echoes (N_DE) -- pre-computed here
+    A_DE = (cosFA_RO*E1_subTR)**N_DE # =1 if N_DE=0
+    i = numpy.arange(int(N_DE))
+    B_DE = (1-E1_subTR)*numpy.sum((cosFA_RO*E1_subTR)[..., None]**i, axis=-1) # =0 if N_DE=0
+    Mz_MT0 = Mz_MT0*A_DE + B_DE
     
-    return Mz_MT0,A_RAGE,B_RAGE
+    return Mz_MT0,A_RAGE,B_RAGE,A_DE,B_DE
 
 def func_MTsat_RAGE_root(delta,xData,yData):
-    Mz_MT0,A_RAGE,B_RAGE,E1_dt,E1_BTR,E1_BTRlast,Np,NBTR = xData
+    Mz_MT0,A_RAGE,B_RAGE,E1_dt,E1_BTR,E1_BTRlast,Np,NBTR,A_DE,B_DE = xData
     A_BTR,B_BTR   = func_compute_AB(1-delta,E1_dt,E1_BTR,Np)
     A_BTRL,B_BTRL = func_compute_AB(1-delta,E1_dt,E1_BTRlast,Np)
     
     Mz_MTw = (B_BTRL + B_BTR*A_BTRL*(A_BTR - A_BTR**NBTR)/(A_BTR - A_BTR**2) + B_RAGE*A_BTRL*A_BTR**(NBTR-1))/ \
              (1 - A_BTRL*A_RAGE*A_BTR**(NBTR-1))
     
+    # readout is shifted by dummy echoes
+    Mz_MTw = Mz_MTw*A_DE + B_DE
+
     return Mz_MTw/Mz_MT0 - yData
         
 def func_MTsat_GRE_root(delta,xData,yData):
-    Mz_MT0,A_RAGE,B_RAGE,E1_dt,E1_pihMTdelay,Np = xData
+    Mz_MT0,A_RAGE,B_RAGE,E1_dt,E1_pihMTdelay,Np,A_DE,B_DE = xData
     A_BTR,B_BTR   = func_compute_AB(1-delta,E1_dt,E1_pihMTdelay,Np)
     
     Mz_MTw = (B_BTR + A_BTR*B_RAGE) / (1 - A_BTR*A_RAGE)
+
+    # readout is shifted by dummy echoes
+    Mz_MTw = Mz_MTw*A_DE + B_DE
     
     return Mz_MTw/Mz_MT0 - yData
     
