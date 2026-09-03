@@ -19,6 +19,7 @@ The (mostly-optional) pre-processing steps are as follows:
 5. **ihMT and derived maps**: outputs pre-processed ihMT, ihMTR, MTR-single, MTR-dual, normalized MT-single and/or normalized MT-dual.
 
 ### Usage
+See `proc-ihMT --help`
 ```bash
 proc-ihMT	${FLD_DATA}/ihMT_raw.nii \
 			${FLD_DATA}/res_ \
