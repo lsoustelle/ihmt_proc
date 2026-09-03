@@ -20,15 +20,14 @@ The (mostly-optional) pre-processing steps are as follows:
 
 ### Usage
 ```bash
-proc-ihMT	${FLD_DATA}/ihMT_2p5.nii \
+proc-ihMT	${FLD_DATA}/ihMT_raw.nii \
 			${FLD_DATA}/res_ \
 			--maps ihMTp,ihMTR \
 			--mppca \
 			--unring 1 \
 			--gnldc --gnldc_grad coeff.grad \
 			--moco 1 \
-			--out_int --out_gz \
-			--nthreads 16
+			--out_gz --nthreads 16
 ```
 
 ## ihMT post-processing
