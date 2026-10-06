@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 process_ihMT_cli.py - Processing pipeline for inhomogeneous Magnetization Transfer (ihMT) MRI data.
 
@@ -49,40 +48,25 @@ signal.signal(signal.SIGTERM, _signal_handler)
 ###################################################################
 ############## Argument parsing
 ################################################################### 
-VALID_MAPS = {"ihMTp", "ihMTR", "MTRs", "MTRd", "MTNs", "MTNd"}
-
-MAP_DESCRIPTIONS = """\
-  ihMTp     : pre-processed ihMT stack
-  ihMTR     : 2 * (MTRd - MTRs)
-  MTRs      : 1 - MTs/MT0
-  MTRd      : 1 - MTd/MT0
-  MTNs      : MTs/MT0
-  MTNd      : MTd/MT0"""
-
 text_description = f"""\
 Processing pipeline for inhomogeneous Magnetization Transfer (ihMT) MRI data.
 
 Example:
-  process_ihMT.py path/to/in_ihMT.nii \\
-                  path/to/out_ \\
-                  --maps ihMTR,MTRd \\
-                  --mppca \\
-                  --unring 1 \\
-                  --moco 1 \\
-                  --idx_mt0 1 --idx_mts 2,4 --idx_mtd 3,5 \\
-                  --nthreads 8
-
-Available output maps:
-{MAP_DESCRIPTIONS}
+    proc-ihMT   path/to/ihMT_raw.nii.gz \\
+                path/to/ihMT_preproc.nii.gz \\
+                --mppca \\
+                --unring 1 \\
+                --moco 1 \\
+                --idx_mt0 1 --idx_mts 2,4 --idx_mtd 3,5 \\
+                --nthreads 8
 """
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=text_description, formatter_class=RawTextHelpFormatter)
 
     # Positional
-    parser.add_argument("input", help="Input 4D ihMT NIfTI image.")
-    parser.add_argument("output_prefix", help="Output path-prefix for 3D ihMT-derived NIfTI images\n(e.g. /path/to/out_ -> /path/to/out_ihMTR.nii).")
-    parser.add_argument("--maps", "-c", required=True, metavar="MAP1,MAP2,...", help="Comma-separated list of maps to compute.\n" f"Valid values: {', '.join(VALID_MAPS)}")
+    parser.add_argument("input", help="Input path 4D ihMT NIfTI image.")
+    parser.add_argument("output", help="Output path for pre-processed 4D ihMT NIfTI image.")
 
     # Optional
     parser.add_argument("--mppca", "-d", action="store_true", help="Perform MP-PCA denoising of raw ihMT images.")
@@ -90,7 +74,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--unring", "-u", type=int, choices=[0, 1, 2], default=0, help= "Gibbs-ringing removal method:\n"  
                                                                                         "  0: none (default)\n" 
                                                                                         "  1: 3D Sub-voxel shift unringing\n" 
-                                                                                        "  2: cos-kernel apodization & zero-filling ×2")
+                                                                                        "  2: cos-kernel apodization & zero-filling x2 (legacy)")
     parser.add_argument("--gnldc", "-w", action="store_true", help="Perform gradient non-linearity distortion correction.")
     parser.add_argument("--gnldc_grad", "-g", default=None, help="Path to *.grad file for distortion correction.")
     parser.add_argument("--gnldc_ngrid", "-N", type=int, default=60, help="Number of grid points for distortion correction (default: 60).")
@@ -102,10 +86,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--idx_mt0", "-R", default=None, help="Comma-separated 1-based indices of MT Reference (MT0) volumes\n(default: 1).")
     parser.add_argument("--idx_mts", "-S", default=None, help="Comma-separated 1-based indices of MT Single (MTs) volumes\n(default: 2,4,6,...,N-1).")
     parser.add_argument("--idx_mtd", "-D", default=None, help="Comma-separated 1-based indices of MT Dual (MTd) volumes\n(default: 3,5,7,...,N).")
-    parser.add_argument("--nthreads", "-n", type=int, default=1, help="Number of threads for ANTs operations (default: 1).")
-    parser.add_argument("--out_int", "-I", action="store_true", help="x1000 scaling of ihMT-derived maps and convert to int16 (data compression benefit).")
-    parser.add_argument("--out_gz",  "-G", action="store_true", help="Write outputs as .nii.gz file(s).")
-    parser.add_argument("--keep_tmp", "-k", action="store_true", help="Keep temporary files (default: delete on exit).")
+    parser.add_argument("--nthreads", "-n",type=int, default=1, help="Number of threads for MP-PCA, degibbs & ANTs operations (default: 1).")
+    parser.add_argument("--keep_tmp", "-k",action="store_true", help="Keep temporary files (default: delete on exit).")
     parser.add_argument("--verbose", "-v", action="store_true",help="High verbosity mode.")
 
     return parser.parse_args()
@@ -121,29 +103,15 @@ def _parse_int_list(s: str, name: str) -> list[int]:
         raise argparse.ArgumentTypeError(f"--{name} must be a comma-separated list of integers (e.g. 1,2,3).")
 
 def validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser) -> dict:
-    # Validate and resolve all arguments.  Returns a dict of parsed/resolved values
+    # Validate and resolve all arguments. Returns a dict of parsed/resolved values
     # so the rest of the script works with clean Python objects.
     v: dict = {}
 
     # Input
     v["input_path"] = Path(args.input)
 
-    # Output prefix
-    output_prefix = Path(args.output_prefix)
-    out_dir = output_prefix.parent
-    if not out_dir.is_dir():
-        parser.error(f"Output directory does not exist: {out_dir}")
-    v["output_prefix"] = output_prefix
-
-    # Maps
-    requested_maps = [m.strip() for m in args.maps.split(",")]
-    invalid = set(requested_maps) - VALID_MAPS
-    if invalid:
-        parser.error(
-            f"Unrecognised map(s): {sorted(invalid)}. "
-            f"Valid values: {sorted(VALID_MAPS)}"
-        )
-    v["maps"] = set(requested_maps)
+    # Output
+    v["output_path"] = Path(args.output)
 
     # Threads
     v["nthreads"] = min(get_physCPU_number(), args.nthreads)
@@ -205,12 +173,6 @@ def validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser) -> 
         v["idx_mt0"] = None
         v["idx_mts"] = None
         v["idx_mtd"] = None
-
-    # Output as int16
-    v["out_int"] = True if args.out_int else False
-
-    # Output as .nii.gz
-    v["out_gz"] = True if args.out_gz else False
 
     # Keep temporary files
     global flag_keep_tmp 
@@ -358,7 +320,6 @@ def step_moco_ants_mt0(nii_path: Path, idx_mt0: list[int], tmp_fld: Path, verbos
     subprocess.run(cmd, check=True)
     print("  Motion Correction (antsMotionCorr -> MT0): done\n")
 
-
 def step_moco_ants_avg(nii_path: Path, tmp_fld: Path, verbose: bool = False) -> None:
     # antsMotionCorr registration of all volumes onto the time-series average.
     # Step 1: compute average; Step 2: register each volume to average.
@@ -391,44 +352,11 @@ def _average_volumes(data: np.ndarray, indices_1based: list[int]) -> np.ndarray:
     vols = np.stack([data[..., i - 1] for i in indices_1based], axis=-1)
     return vols.mean(axis=-1)
 
-def step_compute_maps(nii_path: Path, idx_mt0: list[int], idx_mts: list[int], idx_mtd: list[int],
-                      requested_maps: set[str], output_prefix: Path, out_gz: bool, out_int: bool) -> None:
-    # Compute all requested ihMT-derived maps and write them to output_prefix<map>.nii.{gz}.
-    # ANTs ImageMath / AverageImages / ThresholdImage operations -> numpy.
-    print("  Writing outputs...")
+def step_write_output(nii_path: Path, output: Path) -> None:
+    print("  Writing output...")
     ihMTp, ref_nii = _nib_load(nii_path)
-
-    # Average per contrast
-    MT0_avg = _average_volumes(ihMTp, idx_mt0)
-    MTs_avg = _average_volumes(ihMTp, idx_mts)
-    MTd_avg = _average_volumes(ihMTp, idx_mtd)
-
-    # Maps
-    MTRs  = 1.0 - np.divide(MTs_avg, MT0_avg, out=np.zeros_like(MTs_avg), where=MT0_avg != 0)  # 1 - MTs/MT0
-    MTRd  = 1.0 - np.divide(MTd_avg, MT0_avg, out=np.zeros_like(MTs_avg), where=MT0_avg != 0)  # 1 - MTd/MT0
-    ihMTR = 2.0 * (MTRd - MTRs)                                                                # 2*(MTRd - MTRs)
-    MTNs  = np.divide(MTs_avg, MT0_avg,out=np.zeros_like(MTs_avg),where=MT0_avg != 0)          # MTs/MT0
-    MTNd  = np.divide(MTd_avg, MT0_avg,out=np.zeros_like(MTs_avg),where=MT0_avg != 0)          # MTd/MT0
-
-    # Save
-    def _write_outputs(arr: np.ndarray, name: str) -> None:
-        if name is not "ihMTp":
-            arr  = arr * (arr > 0).astype(np.float32) # keep >0 values
-            arr  = arr * (arr < 1).astype(np.float32) # keep <1 values
-            arr  = (arr * 1000).astype(np.int16) if out_int else arr
-        ext      = ".nii.gz" if out_gz else ".nii" 
-        out_path = Path(str(output_prefix) + name + ext)
-        _nib_save(arr, ref_nii, out_path)
-        print(f"    Saved: {out_path}")
-
-    if "ihMTp"  in requested_maps: _write_outputs(ihMTp, "ihMTp")
-    if "MTRs"   in requested_maps: _write_outputs(MTRs,  "MTRs")
-    if "MTRd"   in requested_maps: _write_outputs(MTRd,  "MTRd")
-    if "ihMTR"  in requested_maps: _write_outputs(ihMTR, "ihMTR")
-    if "MTNs"   in requested_maps: _write_outputs(MTNs,  "MTNs")
-    if "MTNd"   in requested_maps: _write_outputs(MTNd,  "MTNd")
-
-    print("  Writing outputs: done")
+    _nib_save(ihMTp, ref_nii, output)
+    print("  Writing output: done")
 
 ###################################################################
 ############## Get CPU info
@@ -551,15 +479,15 @@ def main() -> None:
         print("--- Step 4: Motion Correction (skipped)")
 
     # Step 5 - Map computation
-    print("--- Step 5: Map computation")
-    step_compute_maps(tmp_nii, v["idx_mt0"], v["idx_mts"], v["idx_mtd"], v["maps"], v["output_prefix"], v["out_gz"], v["out_int"])
+    print("--- Step 5: Saving output")
+    step_write_output(tmp_nii, v["output_path"])
 
     # Cleanup
     if not flag_keep_tmp:
         cleanup()
         print("\nTemporary files removed.")
     else:
-        tmp_dest = v["output_prefix"].parent / tmp_fld.name
+        tmp_dest = v["output_path"].parent / tmp_fld.name
         shutil.move(tmp_fld, tmp_dest)
         print(f"\nTemporary files kept at: {tmp_dest}")
 

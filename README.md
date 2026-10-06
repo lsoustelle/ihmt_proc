@@ -11,24 +11,26 @@ pip install .
 ```
 
 ## ihMT pre-processing
-The (mostly-optional) pre-processing steps are as follows:
+The optional pre-processing steps are as follows (see `proc-ihMT --help`):
 1. **MP-PCA denoising**: uses up-to-date [(t)MP-PCA denoiser](https://github.com/lsoustelle/tMPPCA) [1].
 2. **Gibbs-ringing removal**: either (i) [`svsdegibbs`](https://github.com/lsoustelle/svsdegibbs) (port of `mrdegibbs` from MRtrix3 [dev](https://github.com/MRtrix3/mrtrix3/tree/dev) branch; for 3D volumes [2,3]), or (ii) cosine apodization+2-fold upscaling (legacy).
 3. **Gradient non-linearity distortion correction**: gradient unwarping ([`gradunwarp`](https://github.com/Washington-University/gradunwarp/tree/master)); requires to provide the associated \*.grad coil file to your MR system (Siemens only).
 4. **Motion correction**: ihMT-MoCo [4-6] (human brain __only__), or [ANTs'](https://github.com/ANTsX/ANTs) antsMotionCorr onto MT<sub>0</sub> or average target [7]. ihMT-MoCo uses niprep's implementation of [`mri_synthstrip`](https://github.com/nipreps/synthstrip) and [FreeSurfer's weights](https://surfer.nmr.mgh.harvard.edu/docs/synthstrip/) (automatically pulled) [8]. When using ihMT-MoCo, you accept the terms stated in the following [EULA](https://crmbm.univ-amu.fr/resources/ihmt-moco/).
-5. **ihMT and derived maps**: outputs pre-processed ihMT, ihMTR, MTR-single, MTR-dual, normalized MT-single and/or normalized MT-dual.
+
+**ihMT and derived maps** (see `calc-ihMTmaps --help`): ihMT, ihMTR, MTR-single, MTR-dual, normalized MT-single and/or normalized MT-dual.
 
 ### Usage
-See `proc-ihMT --help`
 ```bash
 proc-ihMT	${FLD_DATA}/ihMT_raw.nii \
-			${FLD_DATA}/res_ \
-			--maps ihMTp,ihMTR \
+			${FLD_DATA}/ihMT_preproc.nii.gz \
 			--mppca \
 			--unring 1 \
 			--gnldc --gnldc_grad coeff.grad \
 			--moco 1 \
-			--out_gz --nthreads 16
+			--nthreads 16
+
+calc-ihMTmaps 	${FLD_DATA}/ihMT_preproc.nii.gz \
+				--ihMTR ${FLD_DATA}/ihMTR.nii.gz \
 ```
 
 ## ihMT post-processing
